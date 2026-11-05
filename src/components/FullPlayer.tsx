@@ -90,7 +90,7 @@ export const FullPlayer: React.FC = () => {
     if (navigator.share) {
       navigator.share({
         title: currentTrack.title,
-        text: `Listen to ${currentTrack.title} by ${currentTrack.artist} on Apple Music`,
+        text: `Listen to ${currentTrack.title} by ${currentTrack.artist} on Exotic Music`,
         url: currentTrack.appleMusicUrl,
       }).catch(() => {});
     } else {
@@ -178,7 +178,7 @@ export const FullPlayer: React.FC = () => {
                 className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-white/10 text-left text-sm font-medium transition text-neutral-300"
               >
                 <Sparkles className="w-4 h-4" />
-                <span>View on Apple Music</span>
+                <span>View Song Source</span>
               </a>
             </div>
           )}

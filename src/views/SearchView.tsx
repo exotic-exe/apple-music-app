@@ -13,7 +13,7 @@ const GENRES = [
   { name: 'Pure Pop', gradient: 'from-blue-500 to-cyan-600', query: 'Pop Hits' },
   { name: 'Acoustic & Chill', gradient: 'from-emerald-500 to-teal-700', query: 'Acoustic Chill' },
   { name: 'Dance & EDM', gradient: 'from-fuchsia-600 to-pink-700', query: 'EDM Dance' },
-  { name: 'Apple Music Classical', gradient: 'from-stone-600 to-neutral-800', query: 'Classical' },
+  { name: 'Exotic Music Classical', gradient: 'from-stone-600 to-neutral-800', query: 'Classical' },
 ];
 
 export const SearchView: React.FC = () => {
@@ -127,7 +127,7 @@ export const SearchView: React.FC = () => {
       {loading && (
         <div className="flex flex-col items-center justify-center py-16 text-neutral-400">
           <Loader2 className="w-8 h-8 animate-spin text-[#FA233B] mb-3" />
-          <p className="text-sm font-semibold">Searching Apple Music catalog...</p>
+          <p className="text-sm font-semibold">Searching Exotic Music catalog...</p>
         </div>
       )}
 

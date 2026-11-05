@@ -58,7 +58,7 @@ export const BrowseView: React.FC = () => {
             <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
               <div>
                 <span className="text-[10px] uppercase font-bold tracking-widest text-neutral-300">
-                  Apple Music Playlist
+                  Exotic Music Playlist
                 </span>
                 <h3 className="text-xl font-bold text-white drop-shadow">
                   {item.title}
@@ -76,10 +76,10 @@ export const BrowseView: React.FC = () => {
         ))}
       </div>
 
-      {/* Apple Music Radio Stations */}
+      {/* Exotic Music Radio Stations */}
       <div className="mb-8">
         <h2 className="text-xl font-bold text-white tracking-tight mb-3">
-          Live Apple Music Radio
+          Live Exotic Music Radio
         </h2>
 
         <div className="grid grid-cols-2 gap-3">
@@ -94,7 +94,7 @@ export const BrowseView: React.FC = () => {
               <span className="text-[10px] uppercase font-bold text-[#FA233B] tracking-wider">
                 Live Now
               </span>
-              <h4 className="text-base font-bold text-white">Apple Music 1</h4>
+              <h4 className="text-base font-bold text-white">Exotic Music 1</h4>
               <p className="text-xs text-neutral-400">The new music that matters</p>
             </div>
           </div>
@@ -110,7 +110,7 @@ export const BrowseView: React.FC = () => {
               <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">
                 Live Now
               </span>
-              <h4 className="text-base font-bold text-white">Apple Music Hits</h4>
+              <h4 className="text-base font-bold text-white">Exotic Music Hits</h4>
               <p className="text-xs text-neutral-400">Favorite songs you know and love</p>
             </div>
           </div>
