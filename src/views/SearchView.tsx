@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, X, Download, Sparkles, Loader2, Play, Music } from 'lucide-react';
+import { Search, X, Download, Sparkles, Loader2, Play, Music, Check } from 'lucide-react';
 import { searchAppleMusic, FEATURED_TRACKS } from '../services/appleMusicApi';
 import { Track } from '../types/music';
 import { usePlayer } from '../context/PlayerContext';
@@ -23,7 +23,7 @@ export const SearchView: React.FC = () => {
   const [recents, setRecents] = useState<string[]>([]);
   const [storefront, setStorefront] = useState<'in' | 'us'>('in');
 
-  const { playTrack, currentTrack, isPlaying, openAmDlModal } = usePlayer();
+  const { playTrack, currentTrack, isPlaying, downloadTrack, downloadedTrackIds } = usePlayer();
 
   useEffect(() => {
     setRecents(getRecentSearches());
@@ -198,12 +198,20 @@ export const SearchView: React.FC = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        openAmDlModal(track);
+                        downloadTrack(track);
                       }}
-                      className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white flex items-center justify-center active:scale-90 transition flex-shrink-0"
-                      title="Download with am-dl"
+                      className={`w-9 h-9 rounded-full flex items-center justify-center active:scale-90 transition flex-shrink-0 ${
+                        downloadedTrackIds.has(track.id)
+                          ? 'bg-emerald-500/20 text-emerald-400'
+                          : 'bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white'
+                      }`}
+                      title={downloadedTrackIds.has(track.id) ? 'Downloaded In-App' : 'Download to Library'}
                     >
-                      <Download className="w-4 h-4" />
+                      {downloadedTrackIds.has(track.id) ? (
+                        <Check className="w-4 h-4" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
                     </button>
                   </div>
                 );

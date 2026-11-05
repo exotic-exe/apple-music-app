@@ -1,11 +1,11 @@
 import React from 'react';
-import { Play, Sparkles, Download, MoreHorizontal, User } from 'lucide-react';
+import { Play, Sparkles, Download, MoreHorizontal, User, Check } from 'lucide-react';
 import { usePlayer } from '../context/PlayerContext';
 import { FEATURED_TRACKS } from '../services/appleMusicApi';
 import { Track } from '../types/music';
 
 export const ListenNowView: React.FC = () => {
-  const { playTrack, currentTrack, isPlaying, openAmDlModal, toggleFavorite, favoriteTrackIds } = usePlayer();
+  const { playTrack, currentTrack, isPlaying, downloadTrack, downloadedTrackIds, toggleFavorite, favoriteTrackIds } = usePlayer();
 
   const heroTrack = FEATURED_TRACKS[0]; // Tum Se Tum Tak
 
@@ -161,12 +161,14 @@ export const ListenNowView: React.FC = () => {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    openAmDlModal(track);
+                    downloadTrack(track);
                   }}
-                  className="p-2 text-neutral-400 hover:text-white active:scale-90 transition"
-                  title="Download with am-dl"
+                  className={`p-2 active:scale-90 transition ${
+                    downloadedTrackIds.has(track.id) ? 'text-emerald-400' : 'text-neutral-400 hover:text-white'
+                  }`}
+                  title={downloadedTrackIds.has(track.id) ? 'Downloaded In-App' : 'Download to Library'}
                 >
-                  <Download className="w-4 h-4" />
+                  {downloadedTrackIds.has(track.id) ? <Check className="w-4 h-4" /> : <Download className="w-4 h-4" />}
                 </button>
               </div>
             );

@@ -54,7 +54,8 @@ export const FullPlayer: React.FC = () => {
     cycleRepeat,
     toggleLyrics,
     openQualityModal,
-    openAmDlModal,
+    downloadTrack,
+    downloadedTrackIds,
     toggleFavorite,
     playTrack,
   } = usePlayer();
@@ -67,6 +68,7 @@ export const FullPlayer: React.FC = () => {
   if (!isFullPlayerOpen || !currentTrack) return null;
 
   const isFavorite = favoriteTrackIds.includes(currentTrack.id);
+  const isDownloaded = downloadedTrackIds.has(currentTrack.id);
   const effectiveCurrentTime = isScrubbing ? scrubValue : currentTime;
   const remainingTime = Math.max(0, duration - effectiveCurrentTime);
 
@@ -143,13 +145,13 @@ export const FullPlayer: React.FC = () => {
             <div className="absolute right-0 top-12 w-56 bg-[#2C2C2E] border border-white/10 rounded-2xl shadow-2xl p-1 z-50 animate-scale-up">
               <button
                 onClick={() => {
-                  openAmDlModal(currentTrack);
+                  downloadTrack(currentTrack);
                   setIsMenuOpen(false);
                 }}
                 className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-white/10 text-left text-sm font-medium transition"
               >
                 <Download className="w-4 h-4 text-[#FA233B]" />
-                <span>Download via am-dl</span>
+                <span>{isDownloaded ? 'Downloaded In-App' : 'Download to Library'}</span>
               </button>
               <button
                 onClick={() => {
@@ -241,7 +243,7 @@ export const FullPlayer: React.FC = () => {
               {currentTrack.artist}
             </p>
 
-            {/* Audio Quality & am-dl Badge Pills */}
+            {/* Audio Quality & Offline Status Badge Pills */}
             <div className="flex items-center space-x-2 mt-1.5">
               <button
                 onClick={openQualityModal}
@@ -252,12 +254,16 @@ export const FullPlayer: React.FC = () => {
               </button>
 
               <button
-                onClick={() => openAmDlModal(currentTrack)}
-                className="px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase bg-[#FA233B]/20 hover:bg-[#FA233B]/30 text-[#FA233B] border border-[#FA233B]/30 rounded-md transition flex items-center space-x-1"
-                title="Apple Music Downloader"
+                onClick={() => downloadTrack(currentTrack)}
+                className={`px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase rounded-md transition flex items-center space-x-1 ${
+                  isDownloaded
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-white/10 hover:bg-white/20 text-neutral-300 active:scale-95'
+                }`}
+                title="Download to In-App Library"
               >
-                <Download className="w-2.5 h-2.5" />
-                <span>am-dl</span>
+                {isDownloaded ? <Check className="w-2.5 h-2.5" /> : <Download className="w-2.5 h-2.5" />}
+                <span>{isDownloaded ? 'Downloaded' : 'Download'}</span>
               </button>
             </div>
           </div>
@@ -384,11 +390,13 @@ export const FullPlayer: React.FC = () => {
           </button>
 
           <button
-            onClick={() => openAmDlModal(currentTrack)}
-            className="p-2.5 rounded-full text-neutral-400 hover:text-white active:scale-90 transition flex items-center space-x-1"
-            title="Download via am-dl"
+            onClick={() => downloadTrack(currentTrack)}
+            className={`p-2.5 rounded-full active:scale-90 transition flex items-center space-x-1 ${
+              isDownloaded ? 'text-emerald-400' : 'text-neutral-400 hover:text-white'
+            }`}
+            title={isDownloaded ? 'Downloaded In-App' : 'Download to Library'}
           >
-            <Download className="w-5 h-5" />
+            {isDownloaded ? <Check className="w-5 h-5" /> : <Download className="w-5 h-5" />}
           </button>
 
           <button

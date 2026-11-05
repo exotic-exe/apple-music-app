@@ -84,7 +84,7 @@ export function getAudioQuality(index = 0): AudioQualityDetails {
 /**
  * Clean and upgrade Apple Music / iTunes artwork URL to high-resolution (1000x1000)
  */
-export function upgradeArtwork(url: string, size = 1000): string {
+export function upgradeArtwork(url: string, size = 600): string {
   if (!url) return 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop';
   // Replace {w}x{h}bb or 100x100bb with desired size
   return url
@@ -124,17 +124,144 @@ export function generateSyncedLyrics(title: string, artist: string, duration = 1
 }
 
 /**
- * Search tracks using the iTunes / Apple Music search API
+ * Helper to map raw iTunes API results into Track items
+ */
+function mapItunesResults(results: any[]): Track[] {
+  return results.map((item: any, idx: number): Track => {
+    const durationSeconds = Math.round((item.trackTimeMillis || 180000) / 1000);
+    const isTumSeTumTak = (item.trackName || '').toLowerCase().includes('tum se tum tak');
+
+    return {
+      id: item.trackId ? String(item.trackId) : `track-${idx}-${Date.now()}`,
+      title: item.trackName || 'Unknown Title',
+      artist: item.artistName || 'Unknown Artist',
+      album: item.collectionName || 'Single',
+      artwork: upgradeArtwork(item.artworkUrl100 || item.artworkUrl60),
+      duration: durationSeconds,
+      streamUrl: item.previewUrl || '',
+      appleMusicUrl:
+        item.trackViewUrl ||
+        item.collectionViewUrl ||
+        `https://music.apple.com/in/album/${item.collectionId || ''}?i=${item.trackId || ''}`,
+      releaseDate: item.releaseDate ? item.releaseDate.split('T')[0] : '2024',
+      genre: item.primaryGenreName || 'Music',
+      isExplicit: item.trackExplicitness === 'explicit',
+      quality: getAudioQuality(idx),
+      lyrics: isTumSeTumTak
+        ? TUM_SE_TUM_TAK_LYRICS
+        : generateSyncedLyrics(item.trackName, item.artistName, durationSeconds),
+    };
+  });
+}
+
+/**
+ * Parse an Apple Music or iTunes URL to extract storefront, song ID, or album ID
+ */
+export function parseAppleMusicUrl(url: string): {
+  trackId?: string;
+  collectionId?: string;
+  country?: string;
+  queryFallback?: string;
+} | null {
+  if (!url || typeof url !== 'string') return null;
+  const isAppleUrl = url.includes('music.apple.com') || url.includes('itunes.apple.com');
+  if (!isAppleUrl) return null;
+
+  const countryMatch = url.match(/music\.apple\.com\/([a-zA-Z]{2})\//);
+  const country = countryMatch ? countryMatch[1].toLowerCase() : 'in';
+
+  // Explicit song parameter: ?i=6816387183
+  const songParamMatch = url.match(/[?&]i=(\d+)/);
+  if (songParamMatch) {
+    return { trackId: songParamMatch[1], country };
+  }
+
+  // Song direct link: /song/tum-se-tum-tak/6816387183
+  const songPathMatch = url.match(/\/song\/[^/]+\/(\d+)/);
+  if (songPathMatch) {
+    return { trackId: songPathMatch[1], country };
+  }
+
+  // Album link: /album/tum-se-tum-tak/6816387173
+  const albumPathMatch = url.match(/\/album\/([^/]+)\/(\d+)/);
+  if (albumPathMatch) {
+    const slug = albumPathMatch[1].replace(/[-_]/g, ' ');
+    return { collectionId: albumPathMatch[2], country, queryFallback: slug };
+  }
+
+  // Generic ID at end of URL
+  const genericIdMatch = url.match(/\/(\d+)(?:\?|$)/);
+  if (genericIdMatch) {
+    return { trackId: genericIdMatch[1], country };
+  }
+
+  return null;
+}
+
+/**
+ * Search tracks using the iTunes / Apple Music search & lookup APIs
+ * Handles both plain search queries and direct Apple Music URLs
  */
 export async function searchAppleMusic(
   query: string,
   country = 'in',
   limit = 25
 ): Promise<Track[]> {
-  if (!query.trim()) return [];
+  const trimmed = query.trim();
+  if (!trimmed) return [];
 
+  // Check if query is an Apple Music URL
+  const parsed = parseAppleMusicUrl(trimmed);
+  if (parsed) {
+    const targetCountry = parsed.country || country;
+
+    // Direct Song Lookup by track ID
+    if (parsed.trackId) {
+      try {
+        const lookupUrl = `https://itunes.apple.com/lookup?id=${parsed.trackId}&country=${targetCountry}`;
+        const res = await fetch(lookupUrl);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.results && data.results.length > 0) {
+            const tracks = mapItunesResults(
+              data.results.filter((r: any) => r.wrapperType === 'track' || r.kind === 'song')
+            );
+            if (tracks.length > 0) return tracks;
+          }
+        }
+      } catch (err) {
+        console.warn('Track lookup error:', err);
+      }
+    }
+
+    // Direct Album Lookup by collection ID
+    if (parsed.collectionId) {
+      try {
+        const lookupUrl = `https://itunes.apple.com/lookup?id=${parsed.collectionId}&entity=song&country=${targetCountry}`;
+        const res = await fetch(lookupUrl);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.results && data.results.length > 0) {
+            const tracks = mapItunesResults(
+              data.results.filter((r: any) => r.wrapperType === 'track' || r.kind === 'song')
+            );
+            if (tracks.length > 0) return tracks;
+          }
+        }
+      } catch (err) {
+        console.warn('Collection lookup error:', err);
+      }
+    }
+
+    // Fallback search with slug title
+    if (parsed.queryFallback) {
+      return searchAppleMusic(parsed.queryFallback, targetCountry, limit);
+    }
+  }
+
+  // Standard Catalog Search
   const url = `https://itunes.apple.com/search?term=${encodeURIComponent(
-    query
+    trimmed
   )}&entity=song&limit=${limit}&country=${country}`;
 
   try {
@@ -148,30 +275,48 @@ export async function searchAppleMusic(
       return [];
     }
 
-    return data.results.map((item: any, idx: number): Track => {
-      const durationSeconds = Math.round((item.trackTimeMillis || 180000) / 1000);
-      const isTumSeTumTak = (item.trackName || '').toLowerCase().includes('tum se tum tak');
-      
-      return {
-        id: item.trackId || `track-${idx}-${Date.now()}`,
-        title: item.trackName || 'Unknown Title',
-        artist: item.artistName || 'Unknown Artist',
-        album: item.collectionName || 'Single',
-        artwork: upgradeArtwork(item.artworkUrl100 || item.artworkUrl60),
-        duration: durationSeconds,
-        streamUrl: item.previewUrl || '',
-        appleMusicUrl: item.trackViewUrl || item.collectionViewUrl || `https://music.apple.com/in/album/${item.collectionId || ''}?i=${item.trackId || ''}`,
-        releaseDate: item.releaseDate ? item.releaseDate.split('T')[0] : '2024',
-        genre: item.primaryGenreName || 'Music',
-        isExplicit: item.trackExplicitness === 'explicit',
-        quality: getAudioQuality(idx),
-        lyrics: isTumSeTumTak ? TUM_SE_TUM_TAK_LYRICS : generateSyncedLyrics(item.trackName, item.artistName, durationSeconds),
-      };
-    });
+    return mapItunesResults(data.results);
   } catch (error) {
     console.error('Error querying Apple Music catalog:', error);
     return [];
   }
+}
+
+/**
+ * Dynamically resolve a fresh, guaranteed playable stream URL for any track
+ * Prevents 404/expired CDN audio errors
+ */
+export async function resolveFreshStreamUrl(track: Track): Promise<string | null> {
+  // 1. Try track lookup by Apple Music / iTunes ID
+  if (track.id && !String(track.id).startsWith('track-')) {
+    try {
+      const res = await fetch(`https://itunes.apple.com/lookup?id=${track.id}&country=in`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.results && data.results[0] && data.results[0].previewUrl) {
+          return data.results[0].previewUrl;
+        }
+      }
+    } catch (e) {
+      console.warn('ID lookup failed:', e);
+    }
+  }
+
+  // 2. Try search by title and artist
+  try {
+    const q = `${track.title} ${track.artist}`.trim();
+    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=1&country=in`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.results && data.results[0] && data.results[0].previewUrl) {
+        return data.results[0].previewUrl;
+      }
+    }
+  } catch (e) {
+    console.warn('Search fallback lookup failed:', e);
+  }
+
+  return null;
 }
 
 /**
@@ -183,7 +328,7 @@ export const FEATURED_TRACKS: Track[] = [
     title: 'Tum Se Tum Tak',
     artist: 'Niyam',
     album: 'Tum Se Tum Tak - Single',
-    artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/79/9f/4e/799f4ef6-332e-da47-d45e-99018cc5f3e8/885288765236.jpg/1000x1000bb.jpg',
+    artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/79/9f/4e/799f4ef6-332e-da47-d45e-99018cc5f3e8/885288765236.jpg/600x600bb.jpg',
     duration: 157,
     streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/0c/6b/d4/0c6bd4c5-2d76-d8c8-0b53-0ba44e33789d/mzaf_8699417771237482318.plus.aac.p.m4a',
     appleMusicUrl: 'https://music.apple.com/in/album/tum-se-tum-tak/6816387173?i=6816387183',
@@ -206,9 +351,9 @@ export const FEATURED_TRACKS: Track[] = [
     title: 'Tauba Tauba',
     artist: 'Karan Aujla',
     album: 'Bad Newz (Original Motion Picture Soundtrack)',
-    artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/bf/16/ec/bf16ec6a-0d86-1755-6ea6-235b37ae6cb8/8903247077643_cover.jpg/1000x1000bb.jpg',
+    artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/79/d2/01/79d201d2-e54d-5604-81fb-313f30db7219/198588533581.jpg/600x600bb.jpg',
     duration: 206,
-    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/64/7b/72/647b72ba-7711-2e55-32e7-08ca1492ba66/mzaf_15783515082496155554.plus.aac.p.m4a',
+    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/34/8d/63/348d6342-2c35-bf31-8131-2c8b3cfe3c09/mzaf_15374551219149804677.plus.aac.p.m4a',
     appleMusicUrl: 'https://music.apple.com/in/album/tauba-tauba/1755353163?i=1755353164',
     releaseDate: '2024-07-02',
     genre: 'Bollywood',
@@ -221,9 +366,9 @@ export const FEATURED_TRACKS: Track[] = [
     title: 'Chaleya',
     artist: 'Anirudh Ravichander, Arijit Singh & Shilpa Rao',
     album: 'Jawan (Original Motion Picture Soundtrack)',
-    artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/5a/2a/3b/5a2a3b02-76f8-4504-20b1-4f10738e4a9e/8902894363785.jpg/1000x1000bb.jpg',
+    artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/1e/ff/32/1eff3216-190d-6fd9-8f68-acbba846e6ee/8903431956026_cover.jpg/600x600bb.jpg',
     duration: 200,
-    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview116/v4/21/df/f2/21dff2c1-236f-e3c3-3882-628d0b81df89/mzaf_7302482596489498263.plus.aac.p.m4a',
+    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/55/fb/9c/55fb9c31-320a-5dba-0a3f-5e69552085a7/mzaf_13508224660474474886.plus.aac.p.m4a',
     appleMusicUrl: 'https://music.apple.com/in/album/chaleya/1702422777?i=1702422778',
     releaseDate: '2023-08-14',
     genre: 'Bollywood',
@@ -236,9 +381,9 @@ export const FEATURED_TRACKS: Track[] = [
     title: 'Espresso',
     artist: 'Sabrina Carpenter',
     album: 'Short n\' Sweet',
-    artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/44/e9/87/44e987aa-4252-0ff2-fba8-2a969f64bf1f/24UMGIM51717.rgb.jpg/1000x1000bb.jpg',
+    artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/57/e8/7b/57e87ba0-5057-9bb9-c247-ce7dbe426e89/24UMGIM55213.rgb.jpg/600x600bb.jpg',
     duration: 175,
-    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/e5/22/e1/e522e118-8f55-7cf9-d7ee-c3b0dfb2f3d6/mzaf_10790483863777598687.plus.aac.p.m4a',
+    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/e9/4d/02/e94d0230-11ee-ef94-d2cf-a5d547bd73f4/mzaf_554140808559155562.plus.aac.p.m4a',
     appleMusicUrl: 'https://music.apple.com/in/album/espresso/1749842728?i=1749842733',
     releaseDate: '2024-04-12',
     genre: 'Pop',
@@ -251,9 +396,9 @@ export const FEATURED_TRACKS: Track[] = [
     title: 'Softly',
     artist: 'Karan Aujla & Ikky',
     album: 'Making Memories',
-    artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/ff/88/53/ff8853b0-ceb7-7501-7be1-2a548c26da5f/196362145329_cover.jpg/1000x1000bb.jpg',
+    artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/d3/08/bc/d308bc6a-20e1-6532-d933-35d1b429210e/5054197755538.jpg/600x600bb.jpg',
     duration: 155,
-    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview116/v4/f5/01/fa/f501fa16-c22f-d4a9-a471-ee7c10b64d08/mzaf_17441113511195232812.plus.aac.p.m4a',
+    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/5f/6f/01/5f6f0130-6567-22d4-bc1a-5ccb359c3fac/mzaf_5497113703334703756.plus.aac.p.m4a',
     appleMusicUrl: 'https://music.apple.com/in/album/softly/1701198647?i=1701198651',
     releaseDate: '2023-08-18',
     genre: 'Punjabi Pop',
@@ -266,9 +411,9 @@ export const FEATURED_TRACKS: Track[] = [
     title: 'Starboy (feat. Daft Punk)',
     artist: 'The Weeknd',
     album: 'Starboy',
-    artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/bf/b1/7b/bfb17b20-c8f0-1be4-5396-07440fb359a1/16UMGIM60699.rgb.jpg/1000x1000bb.jpg',
+    artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b5/92/bb/b592bb72-52e3-e756-9b26-9f56d08f47ab/16UMGIM67864.rgb.jpg/600x600bb.jpg',
     duration: 230,
-    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview125/v4/f4/19/08/f41908aa-d576-90e6-992e-360eecb528b1/mzaf_10023674697298642750.plus.aac.p.m4a',
+    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/11/71/d6/1171d6ad-3c96-e027-2af6-58028426588c/mzaf_15137631797407745471.plus.aac.p.m4a',
     appleMusicUrl: 'https://music.apple.com/in/album/starboy-feat-daft-punk/1440871441?i=1440871442',
     releaseDate: '2016-09-21',
     genre: 'R&B/Soul',

@@ -113,6 +113,27 @@ export async function getOfflineTracks(): Promise<Track[]> {
 }
 
 /**
+ * Get all downloaded offline track IDs
+ */
+export async function getOfflineTrackIds(): Promise<Set<string | number>> {
+  try {
+    const db = await openDatabase();
+    return new Promise((resolve) => {
+      const transaction = db.transaction([STORE_TRACKS], 'readonly');
+      const store = transaction.objectStore(STORE_TRACKS);
+      const req = store.getAllKeys();
+
+      req.onsuccess = () => {
+        resolve(new Set((req.result || []) as (string | number)[]));
+      };
+      req.onerror = () => resolve(new Set());
+    });
+  } catch {
+    return new Set();
+  }
+}
+
+/**
  * Check if a track is downloaded
  */
 export async function isTrackDownloaded(trackId: string | number): Promise<boolean> {
@@ -128,6 +149,35 @@ export async function isTrackDownloaded(trackId: string | number): Promise<boole
     });
   } catch {
     return false;
+  }
+}
+
+/**
+ * Get a specific offline track from internal storage
+ */
+export async function getOfflineTrack(trackId: string | number): Promise<Track | null> {
+  try {
+    const db = await openDatabase();
+    return new Promise((resolve) => {
+      const transaction = db.transaction([STORE_TRACKS], 'readonly');
+      const store = transaction.objectStore(STORE_TRACKS);
+      const req = store.get(trackId);
+
+      req.onsuccess = () => {
+        const t = req.result as Track | undefined;
+        if (t && t.audioBlob) {
+          resolve({
+            ...t,
+            streamUrl: URL.createObjectURL(t.audioBlob),
+          });
+        } else {
+          resolve(t || null);
+        }
+      };
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
   }
 }
 
