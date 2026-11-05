@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.applemusic.stream',
-  appName: 'Apple Music',
+  appName: 'exotic',
   webDir: 'dist',
   backgroundColor: '#000000',
   server: {

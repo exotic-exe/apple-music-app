@@ -16,28 +16,32 @@ export const ListenNowView: React.FC = () => {
         <span className="text-xs font-bold uppercase tracking-wider text-[#8E8E93]">
           Today
         </span>
-        <div className="w-8 h-8 rounded-full bg-[#FA233B]/20 text-[#FA233B] flex items-center justify-center font-bold text-xs border border-[#FA233B]/30">
-          <User className="w-4 h-4" />
+        <div className="w-9 h-9 rounded-full overflow-hidden border border-[#FA233B]/40 shadow-md">
+          <img src="/logo.png" alt="exotic" className="w-full h-full object-cover" />
         </div>
       </div>
-      <h1 className="text-3xl font-extrabold tracking-tight text-white mb-6">
-        Listen Now
-      </h1>
+      <div className="flex items-center space-x-3 mb-6">
+        <img src="/logo.png" alt="exotic" className="w-11 h-11 rounded-2xl object-cover shadow-xl border border-white/10" />
+        <div>
+          <span className="text-[11px] font-bold uppercase tracking-widest text-[#FA233B] block">Hi-Res Lossless</span>
+          <h1 className="text-3xl font-extrabold tracking-tight text-white leading-tight">
+            exotic
+          </h1>
+        </div>
+      </div>
 
       {/* Android Native APK Banner */}
       <div className="mb-6 p-4 bg-[#1C1C1E] border border-white/10 rounded-2xl flex items-center justify-between shadow-lg">
         <div className="flex items-center space-x-3 min-w-0 mr-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#FC3C44] to-[#FA233B] flex items-center justify-center flex-shrink-0 shadow-md">
-            <Download className="w-5 h-5 text-white" />
-          </div>
+          <img src="/logo.png" alt="exotic" className="w-11 h-11 rounded-xl object-cover flex-shrink-0 shadow-md border border-white/10" />
           <div className="min-w-0">
-            <h3 className="text-sm font-bold text-white truncate">Android Native App (APK)</h3>
+            <h3 className="text-sm font-bold text-white truncate">exotic Native App (APK)</h3>
             <p className="text-xs text-neutral-400 truncate">24-bit Hi-Res Lossless • Lock Screen Media</p>
           </div>
         </div>
         <a
-          href="/AppleMusic-HiRes.apk"
-          download="AppleMusic-HiRes.apk"
+          href="/exotic.apk"
+          download="exotic.apk"
           className="px-3.5 py-2 bg-gradient-to-r from-[#FC3C44] to-[#FA233B] text-white text-xs font-bold rounded-xl active:scale-95 transition shadow-sm flex items-center space-x-1.5 flex-shrink-0"
         >
           <Download className="w-3.5 h-3.5" />
