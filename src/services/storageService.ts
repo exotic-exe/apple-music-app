@@ -1,10 +1,10 @@
 import { Track } from '../types/music';
 
-const DB_NAME = 'AppleMusicDB';
-const DB_VERSION = 1;
+const DB_NAME = 'ExoticMusicDB';
+const DB_VERSION = 2;
 const STORE_TRACKS = 'downloaded_tracks';
-const FAVORITES_KEY = 'apple_music_favorites';
-const RECENT_SEARCHES_KEY = 'apple_music_recent_searches';
+const STORE_FAVORITES = 'favorite_tracks';
+const RECENT_SEARCHES_KEY = 'exotic_recent_searches';
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -15,6 +15,9 @@ function openDatabase(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_TRACKS)) {
         db.createObjectStore(STORE_TRACKS, { keyPath: 'id' });
       }
+      if (!db.objectStoreNames.contains(STORE_FAVORITES)) {
+        db.createObjectStore(STORE_FAVORITES, { keyPath: 'id' });
+      }
     };
 
     request.onsuccess = () => resolve(request.result);
@@ -23,19 +26,18 @@ function openDatabase(): Promise<IDBDatabase> {
 }
 
 /**
- * Save a track to offline storage
+ * Save a track with raw audio Blob to offline IndexedDB storage
  */
 export async function saveTrackOffline(track: Track): Promise<void> {
   try {
-    let localStreamUrl = track.streamUrl;
+    let audioBlob: Blob | undefined = track.audioBlob;
 
-    // If streamUrl is accessible, fetch and cache the blob
-    if (track.streamUrl && track.streamUrl.startsWith('http')) {
+    // Fetch and store actual binary audio blob for true offline playback
+    if (!audioBlob && track.streamUrl && track.streamUrl.startsWith('http')) {
       try {
         const response = await fetch(track.streamUrl);
         if (response.ok) {
-          const blob = await response.blob();
-          localStreamUrl = URL.createObjectURL(blob);
+          audioBlob = await response.blob();
         }
       } catch (err) {
         console.warn('Could not cache full audio blob locally, saving track reference:', err);
@@ -46,7 +48,7 @@ export async function saveTrackOffline(track: Track): Promise<void> {
       ...track,
       isDownloaded: true,
       downloadDate: Date.now(),
-      streamUrl: localStreamUrl,
+      audioBlob,
     };
 
     const db = await openDatabase();
@@ -80,7 +82,7 @@ export async function removeTrackOffline(trackId: string | number): Promise<void
 }
 
 /**
- * Get all downloaded offline tracks
+ * Get all downloaded offline tracks with freshly initialized Blob URLs
  */
 export async function getOfflineTracks(): Promise<Track[]> {
   try {
@@ -90,7 +92,18 @@ export async function getOfflineTracks(): Promise<Track[]> {
       const store = transaction.objectStore(STORE_TRACKS);
       const req = store.getAll();
 
-      req.onsuccess = () => resolve(req.result || []);
+      req.onsuccess = () => {
+        const tracks: Track[] = (req.result || []).map((t: Track) => {
+          if (t.audioBlob) {
+            return {
+              ...t,
+              streamUrl: URL.createObjectURL(t.audioBlob),
+            };
+          }
+          return t;
+        });
+        resolve(tracks);
+      };
       req.onerror = () => reject(req.error);
     });
   } catch (err) {
@@ -119,29 +132,54 @@ export async function isTrackDownloaded(trackId: string | number): Promise<boole
 }
 
 /**
- * Local Storage Favorites
+ * Favorite Tracks Persistence
  */
-export function getFavoriteTrackIds(): (string | number)[] {
+export async function getFavoriteTracks(): Promise<Track[]> {
   try {
-    const data = localStorage.getItem(FAVORITES_KEY);
-    return data ? JSON.parse(data) : [];
+    const db = await openDatabase();
+    return new Promise((resolve) => {
+      const transaction = db.transaction([STORE_FAVORITES], 'readonly');
+      const store = transaction.objectStore(STORE_FAVORITES);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
   } catch {
     return [];
   }
 }
 
-export function toggleFavoriteTrack(trackId: string | number): boolean {
-  const favorites = getFavoriteTrackIds();
-  const exists = favorites.includes(trackId);
-  const updated = exists ? favorites.filter((id) => id !== trackId) : [...favorites, trackId];
-
+export async function toggleFavoriteTrack(track: Track): Promise<boolean> {
   try {
-    localStorage.setItem(FAVORITES_KEY, JSON.stringify(updated));
-  } catch (err) {
-    console.error('Error updating favorites:', err);
-  }
+    const db = await openDatabase();
+    return new Promise((resolve) => {
+      const transaction = db.transaction([STORE_FAVORITES], 'readwrite');
+      const store = transaction.objectStore(STORE_FAVORITES);
+      const checkReq = store.get(track.id);
 
-  return !exists;
+      checkReq.onsuccess = () => {
+        if (checkReq.result) {
+          store.delete(track.id);
+          resolve(false);
+        } else {
+          store.put(track);
+          resolve(true);
+        }
+      };
+      checkReq.onerror = () => resolve(false);
+    });
+  } catch {
+    return false;
+  }
+}
+
+export async function getFavoriteTrackIds(): Promise<(string | number)[]> {
+  try {
+    const tracks = await getFavoriteTracks();
+    return tracks.map((t) => t.id);
+  } catch {
+    return [];
+  }
 }
 
 /**

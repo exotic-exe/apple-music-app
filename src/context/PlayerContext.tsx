@@ -1,10 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Track, AudioQualityDetails } from '../types/music';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { App as CapApp } from '@capacitor/app';
+import { Track } from '../types/music';
 import { FEATURED_TRACKS } from '../services/appleMusicApi';
 import {
   saveTrackOffline,
   removeTrackOffline,
-  isTrackDownloaded,
   getFavoriteTrackIds,
   toggleFavoriteTrack,
 } from '../services/storageService';
@@ -42,7 +42,7 @@ interface PlayerContextType {
   closeQualityModal: () => void;
   openAmDlModal: (track?: Track) => void;
   closeAmDlModal: () => void;
-  toggleFavorite: (trackId: string | number) => void;
+  toggleFavorite: (track: Track) => void;
   downloadTrack: (track: Track) => Promise<void>;
   deleteDownloadedTrack: (trackId: string | number) => Promise<void>;
 }
@@ -53,7 +53,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [currentTrack, setCurrentTrack] = useState<Track | null>(FEATURED_TRACKS[0]);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(FEATURED_TRACKS[0]?.duration || 180);
+  const [duration, setDuration] = useState<number>(FEATURED_TRACKS[0]?.duration || 157);
   const [volume, setVolumeState] = useState<number>(1);
   const [queue, setQueue] = useState<Track[]>(FEATURED_TRACKS);
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
@@ -70,20 +70,111 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [favoriteTrackIds, setFavoriteTrackIds] = useState<(string | number)[]>([]);
   const [downloadedTrackIds, setDownloadedTrackIds] = useState<Set<string | number>>(new Set());
 
-  // Hidden Audio Element
+  // Audio Element & Stable State Refs
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const repeatModeRef = useRef<'off' | 'all' | 'one'>(repeatMode);
+  const queueRef = useRef<Track[]>(queue);
+  const currentTrackRef = useRef<Track | null>(currentTrack);
+  const isShuffleRef = useRef<boolean>(isShuffle);
+  const isPlayingRef = useRef<boolean>(isPlaying);
 
-  // Initialize Audio
+  // Keep refs synchronized
+  repeatModeRef.current = repeatMode;
+  queueRef.current = queue;
+  currentTrackRef.current = currentTrack;
+  isShuffleRef.current = isShuffle;
+  isPlayingRef.current = isPlaying;
+
+  // Forward declarations for player actions
+  const nextTrackRef = useRef<() => void>(() => {});
+  const prevTrackRef = useRef<() => void>(() => {});
+
+  const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
+    if (!audioRef.current) return;
+
+    if (newQueue && newQueue.length > 0) {
+      setQueue(newQueue);
+      queueRef.current = newQueue;
+    } else if (!queueRef.current.some((t) => t.id === track.id)) {
+      setQueue((prev) => [track, ...prev]);
+    }
+
+    setCurrentTrack(track);
+    currentTrackRef.current = track;
+    setCurrentTime(0);
+    setDuration(track.duration || 180);
+
+    if (track.streamUrl) {
+      audioRef.current.src = track.streamUrl;
+      audioRef.current
+        .play()
+        .then(() => setIsPlaying(true))
+        .catch((err) => {
+          console.warn('Audio playback interrupted or requires interaction:', err);
+          setIsPlaying(false);
+        });
+    } else {
+      // If no preview stream, open am-dl sheet directly
+      setIsPlaying(false);
+      setTargetAmDlTrack(track);
+      setIsAmDlModalOpen(true);
+    }
+  }, []);
+
+  const nextTrack = useCallback(() => {
+    const q = queueRef.current;
+    const cur = currentTrackRef.current;
+    if (q.length === 0 || !cur) return;
+
+    if (isShuffleRef.current) {
+      const randomIndex = Math.floor(Math.random() * q.length);
+      playTrack(q[randomIndex]);
+      return;
+    }
+
+    const currentIndex = q.findIndex((t) => t.id === cur.id);
+    if (currentIndex >= 0 && currentIndex < q.length - 1) {
+      playTrack(q[currentIndex + 1]);
+    } else if (repeatModeRef.current === 'all') {
+      playTrack(q[0]);
+    } else {
+      setIsPlaying(false);
+    }
+  }, [playTrack]);
+
+  const prevTrack = useCallback(() => {
+    const q = queueRef.current;
+    const cur = currentTrackRef.current;
+    if (!cur || q.length === 0) return;
+
+    if (audioRef.current && audioRef.current.currentTime > 4) {
+      audioRef.current.currentTime = 0;
+      setCurrentTime(0);
+      return;
+    }
+
+    const currentIndex = q.findIndex((t) => t.id === cur.id);
+    if (currentIndex > 0) {
+      playTrack(q[currentIndex - 1]);
+    } else {
+      playTrack(q[q.length - 1]);
+    }
+  }, [playTrack]);
+
+  nextTrackRef.current = nextTrack;
+  prevTrackRef.current = prevTrack;
+
+  // Initialize Audio ONCE on mount
   useEffect(() => {
     const audio = new Audio();
     audio.preload = 'auto';
     audioRef.current = audio;
 
-    // Load favorites from local storage
-    setFavoriteTrackIds(getFavoriteTrackIds());
+    // Load initial favorites from storage
+    getFavoriteTrackIds().then((ids) => setFavoriteTrackIds(ids));
 
     const updateTime = () => {
-      if (audio.currentTime) {
+      if (audio.currentTime !== undefined) {
         setCurrentTime(audio.currentTime);
       }
     };
@@ -95,25 +186,38 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const handleEnded = () => {
-      if (repeatMode === 'one') {
+      if (repeatModeRef.current === 'one') {
         audio.currentTime = 0;
         audio.play().catch(() => {});
       } else {
-        nextTrack();
+        nextTrackRef.current();
       }
+    };
+
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    const handleError = (e: Event) => {
+      console.warn('Audio stream error event:', e);
+      setIsPlaying(false);
     };
 
     audio.addEventListener('timeupdate', updateTime);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
+    audio.addEventListener('error', handleError);
 
     return () => {
       audio.removeEventListener('timeupdate', updateTime);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
+      audio.removeEventListener('error', handleError);
       audio.pause();
     };
-  }, [repeatMode]);
+  }, []);
 
   // Update MediaSession API for Native Android Lock Screen & Notification Controls
   useEffect(() => {
@@ -136,20 +240,25 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
 
       navigator.mediaSession.setActionHandler('play', () => {
-        togglePlayPause();
+        if (audioRef.current) {
+          audioRef.current.play().catch(() => {});
+        }
       });
       navigator.mediaSession.setActionHandler('pause', () => {
-        togglePlayPause();
+        if (audioRef.current) {
+          audioRef.current.pause();
+        }
       });
       navigator.mediaSession.setActionHandler('previoustrack', () => {
-        prevTrack();
+        prevTrackRef.current();
       });
       navigator.mediaSession.setActionHandler('nexttrack', () => {
-        nextTrack();
+        nextTrackRef.current();
       });
       navigator.mediaSession.setActionHandler('seekto', (details) => {
-        if (details.seekTime !== undefined) {
-          seek(details.seekTime);
+        if (details.seekTime !== undefined && audioRef.current) {
+          audioRef.current.currentTime = details.seekTime;
+          setCurrentTime(details.seekTime);
         }
       });
     } catch (e) {
@@ -157,40 +266,50 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [currentTrack]);
 
-  // Handle Play Track
-  const playTrack = (track: Track, newQueue?: Track[]) => {
-    if (!audioRef.current) return;
+  // Keep MediaSession Playback & Position State in Sync
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('mediaSession' in navigator)) return;
+    try {
+      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
 
-    if (newQueue && newQueue.length > 0) {
-      setQueue(newQueue);
-    } else if (!queue.some((t) => t.id === track.id)) {
-      setQueue((prev) => [track, ...prev]);
-    }
-
-    setCurrentTrack(track);
-    setCurrentTime(0);
-    setDuration(track.duration || 180);
-
-    if (track.streamUrl) {
-      audioRef.current.src = track.streamUrl;
-      audioRef.current
-        .play()
-        .then(() => setIsPlaying(true))
-        .catch((err) => {
-          console.warn('Autoplay prevented or stream error:', err);
-          setIsPlaying(false);
+      if ('setPositionState' in navigator.mediaSession && duration > 0) {
+        navigator.mediaSession.setPositionState({
+          duration: Math.max(duration, 1),
+          playbackRate: audioRef.current?.playbackRate || 1,
+          position: Math.min(Math.max(currentTime, 0), duration),
         });
-    } else {
-      setIsPlaying(false);
-    }
-  };
+      }
+    } catch {}
+  }, [isPlaying, currentTime, duration]);
+
+  // Android Native Hardware Back Button Handling
+  useEffect(() => {
+    const backListener = CapApp.addListener('backButton', ({ canGoBack }) => {
+      if (isLyricsOpen) {
+        setIsLyricsOpen(false);
+      } else if (isQualityModalOpen) {
+        setIsQualityModalOpen(false);
+      } else if (isAmDlModalOpen) {
+        setIsAmDlModalOpen(false);
+      } else if (isFullPlayerOpen) {
+        setIsFullPlayerOpen(false);
+      } else if (canGoBack) {
+        window.history.back();
+      } else {
+        CapApp.exitApp();
+      }
+    });
+
+    return () => {
+      backListener.then((sub) => sub.remove()).catch(() => {});
+    };
+  }, [isLyricsOpen, isQualityModalOpen, isAmDlModalOpen, isFullPlayerOpen]);
 
   const togglePlayPause = () => {
     if (!audioRef.current || !currentTrack) return;
 
     if (isPlaying) {
       audioRef.current.pause();
-      setIsPlaying(false);
     } else {
       if (!audioRef.current.src && currentTrack.streamUrl) {
         audioRef.current.src = currentTrack.streamUrl;
@@ -208,46 +327,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setCurrentTime(seconds);
   };
 
-  const nextTrack = () => {
-    if (queue.length === 0 || !currentTrack) return;
-
-    if (isShuffle) {
-      const randomIndex = Math.floor(Math.random() * queue.length);
-      playTrack(queue[randomIndex]);
-      return;
-    }
-
-    const currentIndex = queue.findIndex((t) => t.id === currentTrack.id);
-    if (currentIndex >= 0 && currentIndex < queue.length - 1) {
-      playTrack(queue[currentIndex + 1]);
-    } else if (repeatMode === 'all') {
-      playTrack(queue[0]);
-    } else {
-      setIsPlaying(false);
-    }
-  };
-
-  const prevTrack = () => {
-    if (currentTime > 4 && audioRef.current) {
-      // If played more than 4 seconds, restart current track
-      audioRef.current.currentTime = 0;
-      setCurrentTime(0);
-      return;
-    }
-
-    if (queue.length === 0 || !currentTrack) return;
-    const currentIndex = queue.findIndex((t) => t.id === currentTrack.id);
-    if (currentIndex > 0) {
-      playTrack(queue[currentIndex - 1]);
-    } else {
-      playTrack(queue[queue.length - 1]);
-    }
-  };
-
   const setVolume = (val: number) => {
-    setVolumeState(val);
+    const clamped = Math.max(0, Math.min(1, val));
+    setVolumeState(clamped);
     if (audioRef.current) {
-      audioRef.current.volume = Math.max(0, Math.min(1, val));
+      audioRef.current.volume = clamped;
     }
   };
 
@@ -276,9 +360,10 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setTargetAmDlTrack(null);
   };
 
-  const toggleFavorite = (trackId: string | number) => {
-    toggleFavoriteTrack(trackId);
-    setFavoriteTrackIds(getFavoriteTrackIds());
+  const toggleFavorite = async (track: Track) => {
+    await toggleFavoriteTrack(track);
+    const updatedIds = await getFavoriteTrackIds();
+    setFavoriteTrackIds(updatedIds);
   };
 
   const downloadTrack = async (track: Track) => {

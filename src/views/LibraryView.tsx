@@ -2,21 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { Download, Heart, Play, Trash2, Music2, FolderCheck, ChevronRight, Disc } from 'lucide-react';
 import { usePlayer } from '../context/PlayerContext';
 import { Track } from '../types/music';
-import { getOfflineTracks } from '../services/storageService';
+import { getOfflineTracks, getFavoriteTracks } from '../services/storageService';
 import { FEATURED_TRACKS } from '../services/appleMusicApi';
 
 export const LibraryView: React.FC = () => {
   const { playTrack, currentTrack, favoriteTrackIds, deleteDownloadedTrack, openAmDlModal } = usePlayer();
   const [activeSection, setActiveSection] = useState<'all' | 'downloaded' | 'favorites'>('all');
   const [offlineTracks, setOfflineTracks] = useState<Track[]>([]);
+  const [favoriteTracks, setFavoriteTracks] = useState<Track[]>([]);
 
   useEffect(() => {
-    getOfflineTracks().then((tracks) => {
-      setOfflineTracks(tracks);
+    getOfflineTracks().then((tracks) => setOfflineTracks(tracks));
+    getFavoriteTracks().then((tracks) => {
+      if (tracks.length > 0) {
+        setFavoriteTracks(tracks);
+      } else {
+        // Fallback to featured tracks matching favorite ids if any
+        setFavoriteTracks(FEATURED_TRACKS.filter((t) => favoriteTrackIds.includes(t.id)));
+      }
     });
-  }, [activeSection]);
-
-  const favoriteTracks = FEATURED_TRACKS.filter((t) => favoriteTrackIds.includes(t.id));
+  }, [activeSection, favoriteTrackIds]);
 
   return (
     <div className="pb-32 px-4 pt-6 max-w-lg mx-auto">

@@ -70,9 +70,9 @@ export const FullPlayer: React.FC = () => {
   const effectiveCurrentTime = isScrubbing ? scrubValue : currentTime;
   const remainingTime = Math.max(0, duration - effectiveCurrentTime);
 
-  const handleScrubStart = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleScrubStart = () => {
     setIsScrubbing(true);
-    setScrubValue(parseFloat(e.target.value));
+    setScrubValue(currentTime);
   };
 
   const handleScrubChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -153,7 +153,7 @@ export const FullPlayer: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  toggleFavorite(currentTrack.id);
+                  toggleFavorite(currentTrack);
                   setIsMenuOpen(false);
                 }}
                 className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl hover:bg-white/10 text-left text-sm font-medium transition"
@@ -263,7 +263,7 @@ export const FullPlayer: React.FC = () => {
           </div>
 
           <button
-            onClick={() => toggleFavorite(currentTrack.id)}
+            onClick={() => toggleFavorite(currentTrack)}
             className="w-12 h-12 rounded-full flex items-center justify-center text-white/80 active:scale-80 transition hover:bg-white/10 flex-shrink-0"
             aria-label="Favorite"
           >

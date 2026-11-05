@@ -11,8 +11,14 @@ export const LyricsView: React.FC<LyricsViewProps> = ({ lyrics, currentTime, onS
   const containerRef = useRef<HTMLDivElement | null>(null);
   const activeLineRef = useRef<HTMLDivElement | null>(null);
 
-  // Find currently active lyric line
-  const activeIndex = lyrics.findLastIndex((line) => currentTime >= line.time);
+  // Find currently active lyric line with backward loop for universal WebView compatibility
+  let activeIndex = -1;
+  for (let i = lyrics.length - 1; i >= 0; i--) {
+    if (currentTime >= lyrics[i].time) {
+      activeIndex = i;
+      break;
+    }
+  }
 
   // Smoothly scroll active line to center
   useEffect(() => {

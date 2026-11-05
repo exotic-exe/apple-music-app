@@ -35,6 +35,7 @@ export interface Track {
   lyrics?: LyricLine[];
   isDownloaded?: boolean;
   downloadDate?: number;
+  audioBlob?: Blob;
 }
 
 export interface Playlist {

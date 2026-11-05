@@ -8,7 +8,7 @@ export const MiniPlayer: React.FC = () => {
   if (!currentTrack) return null;
 
   return (
-    <div className="fixed bottom-14 left-0 right-0 z-20 px-3 pb-2 max-w-lg mx-auto">
+    <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 z-20 px-3 pb-2 max-w-lg mx-auto">
       <div 
         onClick={openFullPlayer}
         className="apple-mini-blur border border-white/10 rounded-2xl p-2 flex items-center justify-between shadow-2xl active:scale-[0.99] transition-transform duration-150 cursor-pointer"

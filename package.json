@@ -24,7 +24,9 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.6.0",
+    "@capacitor/status-bar": "^8.0.4",
     "@tailwindcss/vite": "^4.3.4",
     "lucide-react": "^1.68.0",
     "react": "^19.3.1",
