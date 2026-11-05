@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .apple-blur {
+    background-color: rgba(20, 20, 22, 0.75);
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
+  }
+  .apple-mini-blur {
+    background-color: rgba(30, 30, 32, 0.85);
+    backdrop-filter: blur(30px) saturate(200%);
+    -webkit-backdrop-filter: blur(30px) saturate(200%);
+  }
+  .apple-card-blur {
+    background-color: rgba(36, 36, 38, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+}
+
+@keyframes pulseSlow {
+  0%, 100% {
+    transform: scale(1) translate(0px, 0px);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.15) translate(15px, -20px);
+    opacity: 0.85;
+  }
+}
+
+@keyframes pulseSlow2 {
+  0%, 100% {
+    transform: scale(1.1) translate(0px, 0px);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(0.95) translate(-25px, 25px);
+    opacity: 0.75;
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulseSlow 8s ease-in-out infinite;
+}
+
+.animate-pulse-slow-2 {
+  animation: pulseSlow2 10s ease-in-out infinite;
+}
+
+/* Hide scrollbars for clean carousel look */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
