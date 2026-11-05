@@ -24,6 +24,27 @@ export const ListenNowView: React.FC = () => {
         Listen Now
       </h1>
 
+      {/* Android Native APK Banner */}
+      <div className="mb-6 p-4 bg-[#1C1C1E] border border-white/10 rounded-2xl flex items-center justify-between shadow-lg">
+        <div className="flex items-center space-x-3 min-w-0 mr-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#FC3C44] to-[#FA233B] flex items-center justify-center flex-shrink-0 shadow-md">
+            <Download className="w-5 h-5 text-white" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-white truncate">Android Native App (APK)</h3>
+            <p className="text-xs text-neutral-400 truncate">24-bit Hi-Res Lossless • Lock Screen Media</p>
+          </div>
+        </div>
+        <a
+          href="/AppleMusic-HiRes.apk"
+          download="AppleMusic-HiRes.apk"
+          className="px-3.5 py-2 bg-gradient-to-r from-[#FC3C44] to-[#FA233B] text-white text-xs font-bold rounded-xl active:scale-95 transition shadow-sm flex items-center space-x-1.5 flex-shrink-0"
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span>APK</span>
+        </a>
+      </div>
+
       {/* Hero Featured Card (Tum Se Tum Tak) */}
       <div className="mb-8">
         <span className="text-xs font-bold uppercase tracking-wider text-[#FA233B] block mb-1">
