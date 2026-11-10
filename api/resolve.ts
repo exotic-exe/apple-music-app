@@ -1,13 +1,24 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import crypto from 'crypto';
+import CryptoJS from 'crypto-js';
 
 function decryptMediaUrl(encryptedUrl: string): string {
-  const key = Buffer.from('38346591');
-  const decipher = crypto.createDecipheriv('des-ecb', key, null);
-  decipher.setAutoPadding(true);
-  let decrypted = decipher.update(encryptedUrl, 'base64', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
+  try {
+    const key = CryptoJS.enc.Utf8.parse('38346591');
+    const decrypted = CryptoJS.DES.decrypt(
+      {
+        ciphertext: CryptoJS.enc.Base64.parse(encryptedUrl),
+      } as any,
+      key,
+      {
+        mode: CryptoJS.mode.ECB,
+        padding: CryptoJS.pad.Pkcs7,
+      }
+    );
+    return decrypted.toString(CryptoJS.enc.Utf8);
+  } catch (err) {
+    console.error('CryptoJS decryption error:', err);
+    return '';
+  }
 }
 
 function cleanQuery(str: string): string {
