@@ -155,6 +155,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         setDownloadedTrackIds((prev) => new Set(prev).add(track.id));
         setDownloadingTrackId(null);
+        setCurrentTrack(saved);
+        currentTrackRef.current = saved;
+        if (saved.duration) {
+          setDuration(saved.duration);
+        }
 
         // Play as soon as downloaded!
         const playUrl = saved.streamUrl || track.streamUrl;
@@ -237,6 +242,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       audio.src = FEATURED_TRACKS[0].streamUrl;
     }
     audioRef.current = audio;
+    if (typeof window !== 'undefined') {
+      (window as any).__audioInstance = audio;
+    }
 
     // Load initial favorites and downloaded cache from storage
     getFavoriteTrackIds().then((ids) => setFavoriteTrackIds(ids));

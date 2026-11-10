@@ -39,9 +39,17 @@ export async function saveTrackOffline(
 
     // Fetch and store actual binary audio blob for true offline playback
     if (!audioBlob) {
-      if (!effectiveStreamUrl || !effectiveStreamUrl.startsWith('http')) {
-        if (freshStreamResolver) {
-          effectiveStreamUrl = (await freshStreamResolver(track)) || effectiveStreamUrl;
+      // If no stream URL or if current URL is a 30-second preview, resolve full-length 320kbps audio first
+      const is30sPreview =
+        !effectiveStreamUrl ||
+        !effectiveStreamUrl.startsWith('http') ||
+        effectiveStreamUrl.includes('itunes.apple.com') ||
+        effectiveStreamUrl.includes('.plus.aac.p.m4a');
+
+      if (is30sPreview && freshStreamResolver) {
+        const fullStream = await freshStreamResolver(track);
+        if (fullStream) {
+          effectiveStreamUrl = fullStream;
         }
       }
 

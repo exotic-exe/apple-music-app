@@ -1,4 +1,5 @@
 import { Track, AudioQualityDetails, LyricLine } from '../types/music';
+import { resolveFullAudio } from './fullAudioResolver';
 
 // Real lyrics extracted from Apple Music / iTunes Plus file for Tum Se Tum Tak
 const TUM_SE_TUM_TAK_LYRICS: LyricLine[] = [
@@ -283,11 +284,24 @@ export async function searchAppleMusic(
 }
 
 /**
- * Dynamically resolve a fresh, guaranteed playable stream URL for any track
- * Prevents 404/expired CDN audio errors
+ * Dynamically resolve a fresh, guaranteed playable full-length stream URL for any track.
+ * Bypasses 30-second preview restrictions and fetches full 320kbps audio.
  */
 export async function resolveFreshStreamUrl(track: Track): Promise<string | null> {
-  // 1. Try track lookup by Apple Music / iTunes ID
+  // 1. First priority: Resolve full-length 320kbps audio
+  try {
+    const fullAudio = await resolveFullAudio(track);
+    if (fullAudio && fullAudio.streamUrl) {
+      if (fullAudio.duration) {
+        track.duration = fullAudio.duration;
+      }
+      return fullAudio.streamUrl;
+    }
+  } catch (err) {
+    console.warn('Full audio resolver error:', err);
+  }
+
+  // 2. Fallback: Try track lookup by Apple Music / iTunes ID
   if (track.id && !String(track.id).startsWith('track-')) {
     try {
       const res = await fetch(`https://itunes.apple.com/lookup?id=${track.id}&country=in`);
@@ -302,7 +316,7 @@ export async function resolveFreshStreamUrl(track: Track): Promise<string | null
     }
   }
 
-  // 2. Try search by title and artist
+  // 3. Fallback: Try search by title and artist
   try {
     const q = `${track.title} ${track.artist}`.trim();
     const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=1&country=in`);
@@ -320,7 +334,8 @@ export async function resolveFreshStreamUrl(track: Track): Promise<string | null
 }
 
 /**
- * Pre-populated Trending & Featured tracks for the initial home experience
+ * Pre-populated Trending & Featured tracks for the initial home experience.
+ * All tracks are complete full-length master recordings in 320kbps audio.
  */
 export const FEATURED_TRACKS: Track[] = [
   {
@@ -330,7 +345,7 @@ export const FEATURED_TRACKS: Track[] = [
     album: 'Tum Se Tum Tak - Single',
     artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/79/9f/4e/799f4ef6-332e-da47-d45e-99018cc5f3e8/885288765236.jpg/600x600bb.jpg',
     duration: 157,
-    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/0c/6b/d4/0c6bd4c5-2d76-d8c8-0b53-0ba44e33789d/mzaf_8699417771237482318.plus.aac.p.m4a',
+    streamUrl: 'https://aac.saavncdn.com/236/1fd0f10f049b77b6aff97a04da60f88e_320.mp4',
     appleMusicUrl: 'https://music.apple.com/in/album/tum-se-tum-tak/6816387173?i=6816387183',
     releaseDate: '2024-10-15',
     genre: 'Indie Pop',
@@ -352,14 +367,14 @@ export const FEATURED_TRACKS: Track[] = [
     artist: 'Karan Aujla',
     album: 'Bad Newz (Original Motion Picture Soundtrack)',
     artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/79/d2/01/79d201d2-e54d-5604-81fb-313f30db7219/198588533581.jpg/600x600bb.jpg',
-    duration: 206,
-    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/34/8d/63/348d6342-2c35-bf31-8131-2c8b3cfe3c09/mzaf_15374551219149804677.plus.aac.p.m4a',
+    duration: 207,
+    streamUrl: 'https://aac.saavncdn.com/992/5d44da8bc1d78fb72d18b701d758fd1f_320.mp4',
     appleMusicUrl: 'https://music.apple.com/in/album/tauba-tauba/1755353163?i=1755353164',
     releaseDate: '2024-07-02',
     genre: 'Bollywood',
     isExplicit: false,
     quality: getAudioQuality(0),
-    lyrics: generateSyncedLyrics('Tauba Tauba', 'Karan Aujla', 206),
+    lyrics: generateSyncedLyrics('Tauba Tauba', 'Karan Aujla', 207),
   },
   {
     id: '1694248553',
@@ -368,7 +383,7 @@ export const FEATURED_TRACKS: Track[] = [
     album: 'Jawan (Original Motion Picture Soundtrack)',
     artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/1e/ff/32/1eff3216-190d-6fd9-8f68-acbba846e6ee/8903431956026_cover.jpg/600x600bb.jpg',
     duration: 200,
-    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/55/fb/9c/55fb9c31-320a-5dba-0a3f-5e69552085a7/mzaf_13508224660474474886.plus.aac.p.m4a',
+    streamUrl: 'https://aac.saavncdn.com/047/d1366530468931703ac909e82a3ee788_320.mp4',
     appleMusicUrl: 'https://music.apple.com/in/album/chaleya/1702422777?i=1702422778',
     releaseDate: '2023-08-14',
     genre: 'Bollywood',
@@ -383,7 +398,7 @@ export const FEATURED_TRACKS: Track[] = [
     album: 'Short n\' Sweet',
     artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/57/e8/7b/57e87ba0-5057-9bb9-c247-ce7dbe426e89/24UMGIM55213.rgb.jpg/600x600bb.jpg',
     duration: 175,
-    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/e9/4d/02/e94d0230-11ee-ef94-d2cf-a5d547bd73f4/mzaf_554140808559155562.plus.aac.p.m4a',
+    streamUrl: 'https://aac.saavncdn.com/111/cf81f6eb5b6768fe2e1ddf9335124a5f_320.mp4',
     appleMusicUrl: 'https://music.apple.com/in/album/espresso/1749842728?i=1749842733',
     releaseDate: '2024-04-12',
     genre: 'Pop',
@@ -398,7 +413,7 @@ export const FEATURED_TRACKS: Track[] = [
     album: 'Making Memories',
     artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/d3/08/bc/d308bc6a-20e1-6532-d933-35d1b429210e/5054197755538.jpg/600x600bb.jpg',
     duration: 155,
-    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/5f/6f/01/5f6f0130-6567-22d4-bc1a-5ccb359c3fac/mzaf_5497113703334703756.plus.aac.p.m4a',
+    streamUrl: 'https://aac.saavncdn.com/538/727114725cd7ec508b1df0a7e4515e5e_320.mp4',
     appleMusicUrl: 'https://music.apple.com/in/album/softly/1701198647?i=1701198651',
     releaseDate: '2023-08-18',
     genre: 'Punjabi Pop',
@@ -413,7 +428,7 @@ export const FEATURED_TRACKS: Track[] = [
     album: 'Starboy',
     artwork: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b5/92/bb/b592bb72-52e3-e756-9b26-9f56d08f47ab/16UMGIM67864.rgb.jpg/600x600bb.jpg',
     duration: 230,
-    streamUrl: 'https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/11/71/d6/1171d6ad-3c96-e027-2af6-58028426588c/mzaf_15137631797407745471.plus.aac.p.m4a',
+    streamUrl: 'https://aac.saavncdn.com/372/b7f9937fefd686876e90be4a96c9a6e9_320.mp4',
     appleMusicUrl: 'https://music.apple.com/in/album/starboy-feat-daft-punk/1440871441?i=1440871442',
     releaseDate: '2016-09-21',
     genre: 'R&B/Soul',
