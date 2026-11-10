@@ -23,7 +23,14 @@ export const SearchView: React.FC = () => {
   const [recents, setRecents] = useState<string[]>([]);
   const [storefront, setStorefront] = useState<'in' | 'us'>('in');
 
-  const { playTrack, currentTrack, isPlaying, downloadTrack, downloadedTrackIds } = usePlayer();
+  const {
+    playTrack,
+    currentTrack,
+    isPlaying,
+    downloadTrack,
+    downloadedTrackIds,
+    downloadingTrackId,
+  } = usePlayer();
 
   useEffect(() => {
     setRecents(getRecentSearches());
@@ -203,12 +210,22 @@ export const SearchView: React.FC = () => {
                       className={`w-9 h-9 rounded-full flex items-center justify-center active:scale-90 transition flex-shrink-0 ${
                         downloadedTrackIds.has(track.id)
                           ? 'bg-emerald-500/20 text-emerald-400'
+                          : downloadingTrackId === track.id
+                          ? 'bg-[#FA233B]/20 text-[#FA233B]'
                           : 'bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white'
                       }`}
-                      title={downloadedTrackIds.has(track.id) ? 'Downloaded In-App' : 'Download to Library'}
+                      title={
+                        downloadedTrackIds.has(track.id)
+                          ? 'Downloaded In-App'
+                          : downloadingTrackId === track.id
+                          ? 'Downloading in app...'
+                          : 'Download to Library'
+                      }
                     >
                       {downloadedTrackIds.has(track.id) ? (
                         <Check className="w-4 h-4" />
+                      ) : downloadingTrackId === track.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-[#FA233B]" />
                       ) : (
                         <Download className="w-4 h-4" />
                       )}

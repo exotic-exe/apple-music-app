@@ -20,6 +20,7 @@ import {
   Sparkles,
   Share2,
   Check,
+  Loader2,
 } from 'lucide-react';
 import { usePlayer } from '../context/PlayerContext';
 import { LyricsView } from './LyricsView';
@@ -56,6 +57,7 @@ export const FullPlayer: React.FC = () => {
     openQualityModal,
     downloadTrack,
     downloadedTrackIds,
+    downloadingTrackId,
     toggleFavorite,
     playTrack,
   } = usePlayer();
@@ -258,12 +260,32 @@ export const FullPlayer: React.FC = () => {
                 className={`px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase rounded-md transition flex items-center space-x-1 ${
                   isDownloaded
                     ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : downloadingTrackId === currentTrack.id
+                    ? 'bg-[#FA233B]/20 text-[#FA233B]'
                     : 'bg-white/10 hover:bg-white/20 text-neutral-300 active:scale-95'
                 }`}
-                title="Download to In-App Library"
+                title={
+                  isDownloaded
+                    ? 'Downloaded in In-App Library'
+                    : downloadingTrackId === currentTrack.id
+                    ? 'Downloading in app...'
+                    : 'Download to In-App Library'
+                }
               >
-                {isDownloaded ? <Check className="w-2.5 h-2.5" /> : <Download className="w-2.5 h-2.5" />}
-                <span>{isDownloaded ? 'Downloaded' : 'Download'}</span>
+                {isDownloaded ? (
+                  <Check className="w-2.5 h-2.5" />
+                ) : downloadingTrackId === currentTrack.id ? (
+                  <Loader2 className="w-2.5 h-2.5 animate-spin text-[#FA233B]" />
+                ) : (
+                  <Download className="w-2.5 h-2.5" />
+                )}
+                <span>
+                  {isDownloaded
+                    ? 'Downloaded'
+                    : downloadingTrackId === currentTrack.id
+                    ? 'Downloading...'
+                    : 'Download'}
+                </span>
               </button>
             </div>
           </div>
@@ -392,11 +414,27 @@ export const FullPlayer: React.FC = () => {
           <button
             onClick={() => downloadTrack(currentTrack)}
             className={`p-2.5 rounded-full active:scale-90 transition flex items-center space-x-1 ${
-              isDownloaded ? 'text-emerald-400' : 'text-neutral-400 hover:text-white'
+              isDownloaded
+                ? 'text-emerald-400'
+                : downloadingTrackId === currentTrack.id
+                ? 'text-[#FA233B]'
+                : 'text-neutral-400 hover:text-white'
             }`}
-            title={isDownloaded ? 'Downloaded In-App' : 'Download to Library'}
+            title={
+              isDownloaded
+                ? 'Downloaded In-App'
+                : downloadingTrackId === currentTrack.id
+                ? 'Downloading in app...'
+                : 'Download to Library'
+            }
           >
-            {isDownloaded ? <Check className="w-5 h-5" /> : <Download className="w-5 h-5" />}
+            {isDownloaded ? (
+              <Check className="w-5 h-5" />
+            ) : downloadingTrackId === currentTrack.id ? (
+              <Loader2 className="w-5 h-5 animate-spin text-[#FA233B]" />
+            ) : (
+              <Download className="w-5 h-5" />
+            )}
           </button>
 
           <button

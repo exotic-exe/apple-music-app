@@ -1,12 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Heart, Play, Trash2, Music2, FolderCheck, ChevronRight, Disc, Check } from 'lucide-react';
+import { Download, Heart, Play, Trash2, Music2, FolderCheck, ChevronRight, Disc, Check, Loader2 } from 'lucide-react';
 import { usePlayer } from '../context/PlayerContext';
 import { Track } from '../types/music';
 import { getOfflineTracks, getFavoriteTracks } from '../services/storageService';
 import { FEATURED_TRACKS } from '../services/appleMusicApi';
 
 export const LibraryView: React.FC = () => {
-  const { playTrack, currentTrack, favoriteTrackIds, deleteDownloadedTrack, downloadTrack, downloadedTrackIds } = usePlayer();
+  const {
+    playTrack,
+    currentTrack,
+    favoriteTrackIds,
+    deleteDownloadedTrack,
+    downloadTrack,
+    downloadedTrackIds,
+    downloadingTrackId,
+  } = usePlayer();
   const [activeSection, setActiveSection] = useState<'all' | 'downloaded' | 'favorites'>('all');
   const [offlineTracks, setOfflineTracks] = useState<Track[]>([]);
   const [favoriteTracks, setFavoriteTracks] = useState<Track[]>([]);
@@ -173,11 +181,27 @@ export const LibraryView: React.FC = () => {
                       downloadTrack(track);
                     }}
                     className={`p-2 active:scale-90 transition ${
-                      downloadedTrackIds.has(track.id) ? 'text-emerald-400' : 'text-neutral-400 hover:text-white'
+                      downloadedTrackIds.has(track.id)
+                        ? 'text-emerald-400'
+                        : downloadingTrackId === track.id
+                        ? 'text-[#FA233B]'
+                        : 'text-neutral-400 hover:text-white'
                     }`}
-                    title={downloadedTrackIds.has(track.id) ? 'Downloaded In-App' : 'Download to Library'}
+                    title={
+                      downloadedTrackIds.has(track.id)
+                        ? 'Downloaded In-App'
+                        : downloadingTrackId === track.id
+                        ? 'Downloading in app...'
+                        : 'Download to Library'
+                    }
                   >
-                    {downloadedTrackIds.has(track.id) ? <Check className="w-4 h-4" /> : <Download className="w-4 h-4" />}
+                    {downloadedTrackIds.has(track.id) ? (
+                      <Check className="w-4 h-4" />
+                    ) : downloadingTrackId === track.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-[#FA233B]" />
+                    ) : (
+                      <Download className="w-4 h-4" />
+                    )}
                   </button>
                 </div>
               ))}

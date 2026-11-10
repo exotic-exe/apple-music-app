@@ -26,33 +26,60 @@ function openDatabase(): Promise<IDBDatabase> {
 }
 
 /**
- * Save a track with raw audio Blob to offline IndexedDB storage
+ * Save a track with raw audio Blob to offline IndexedDB storage.
+ * Returns the saved Track with a local blob URL ready for instant playback.
  */
-export async function saveTrackOffline(track: Track): Promise<void> {
+export async function saveTrackOffline(
+  track: Track,
+  freshStreamResolver?: (t: Track) => Promise<string | null>
+): Promise<Track> {
   try {
     let audioBlob: Blob | undefined = track.audioBlob;
+    let effectiveStreamUrl = track.streamUrl;
 
     // Fetch and store actual binary audio blob for true offline playback
-    if (!audioBlob && track.streamUrl && track.streamUrl.startsWith('http')) {
-      try {
-        const response = await fetch(track.streamUrl);
-        if (response.ok) {
-          audioBlob = await response.blob();
+    if (!audioBlob) {
+      if (!effectiveStreamUrl || !effectiveStreamUrl.startsWith('http')) {
+        if (freshStreamResolver) {
+          effectiveStreamUrl = (await freshStreamResolver(track)) || effectiveStreamUrl;
         }
-      } catch (err) {
-        console.warn('Could not cache full audio blob locally, saving track reference:', err);
+      }
+
+      if (effectiveStreamUrl && effectiveStreamUrl.startsWith('http')) {
+        try {
+          const response = await fetch(effectiveStreamUrl);
+          if (response.ok) {
+            audioBlob = await response.blob();
+          } else if (response.status === 404 && freshStreamResolver) {
+            const fresh = await freshStreamResolver(track);
+            if (fresh) {
+              effectiveStreamUrl = fresh;
+              const res2 = await fetch(fresh);
+              if (res2.ok) {
+                audioBlob = await res2.blob();
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('Network error caching audio blob:', err);
+        }
       }
     }
 
+    const localStreamUrl = (audioBlob && audioBlob.size > 0)
+      ? URL.createObjectURL(audioBlob)
+      : (effectiveStreamUrl || track.streamUrl);
+
     const savedTrack: Track = {
       ...track,
-      isDownloaded: true,
+      streamUrl: localStreamUrl,
+      isDownloaded: !!(audioBlob && audioBlob.size > 0),
       downloadDate: Date.now(),
       audioBlob,
     };
 
     const db = await openDatabase();
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const transaction = db.transaction([STORE_TRACKS], 'readwrite');
       const store = transaction.objectStore(STORE_TRACKS);
       const req = store.put(savedTrack);
@@ -60,9 +87,11 @@ export async function saveTrackOffline(track: Track): Promise<void> {
       req.onsuccess = () => resolve();
       req.onerror = () => reject(req.error);
     });
+
+    return savedTrack;
   } catch (error) {
     console.error('Failed to save track offline:', error);
-    throw error;
+    return track;
   }
 }
 
@@ -165,13 +194,15 @@ export async function getOfflineTrack(trackId: string | number): Promise<Track |
 
       req.onsuccess = () => {
         const t = req.result as Track | undefined;
-        if (t && t.audioBlob) {
+        if (t && t.audioBlob && t.audioBlob.size > 0) {
           resolve({
             ...t,
             streamUrl: URL.createObjectURL(t.audioBlob),
+            isDownloaded: true,
           });
         } else {
-          resolve(t || null);
+          // If no binary audio blob is present, treat as not downloaded
+          resolve(null);
         }
       };
       req.onerror = () => resolve(null);

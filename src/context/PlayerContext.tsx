@@ -25,6 +25,7 @@ interface PlayerContextType {
   isQualityModalOpen: boolean;
   favoriteTrackIds: (string | number)[];
   downloadedTrackIds: Set<string | number>;
+  downloadingTrackId: string | number | null;
   toastMessage: string | null;
 
   // Actions
@@ -66,9 +67,11 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Persistence State
+  // Persistence & Download State
   const [favoriteTrackIds, setFavoriteTrackIds] = useState<(string | number)[]>([]);
   const [downloadedTrackIds, setDownloadedTrackIds] = useState<Set<string | number>>(new Set());
+  const [downloadingTrackId, setDownloadingTrackId] = useState<string | number | null>(null);
+  const activeRequestIdRef = useRef<string | number | null>(null);
 
   // Audio Element & Stable State Refs
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -102,6 +105,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const audio = audioRef.current;
       if (!audio) return;
 
+      activeRequestIdRef.current = track.id;
+      const currentReq = track.id;
+
       if (newQueue && newQueue.length > 0) {
         setQueue(newQueue);
         queueRef.current = newQueue;
@@ -114,57 +120,70 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setCurrentTime(0);
       setDuration(track.duration || 180);
 
-      // Stop previous playback to prevent AbortError
+      // Stop prior audio immediately
       try {
         audio.pause();
       } catch {}
 
-      // Check if track is already cached in offline in-app storage
-      const offline = await getOfflineTrack(track.id);
-      let targetUrl = (offline && offline.streamUrl) ? offline.streamUrl : track.streamUrl;
-      if (!targetUrl) {
-        targetUrl = (await resolveFreshStreamUrl(track)) || '';
+      // 1. If already downloaded in in-app storage, play offline blob immediately!
+      const cached = await getOfflineTrack(track.id);
+      if (cached && cached.streamUrl) {
+        if (activeRequestIdRef.current !== currentReq) return;
+        audio.src = cached.streamUrl;
+        audio.load();
+        try {
+          await audio.play();
+          setIsPlaying(true);
+        } catch (e: any) {
+          if (e.name !== 'AbortError') setIsPlaying(false);
+        }
+        return;
       }
 
-      if (targetUrl) {
-        audio.src = targetUrl;
-        audio.load();
-        audio
-          .play()
-          .then(() => setIsPlaying(true))
-          .catch(async (err) => {
-            if (err.name === 'AbortError') {
-              // Intentionally interrupted by another click
-              return;
-            }
-            console.warn('Initial playback failed, resolving fresh stream URL:', err);
-            const fresh = await resolveFreshStreamUrl(track);
-            if (fresh && fresh !== targetUrl && audioRef.current) {
-              audioRef.current.src = fresh;
-              audioRef.current.load();
-              audioRef.current
-                .play()
-                .then(() => setIsPlaying(true))
-                .catch(() => setIsPlaying(false));
-            } else {
+      // 2. Direct download song in app and play as soon as downloaded!
+      setDownloadingTrackId(track.id);
+      showToast(`Downloading "${track.title}" in app...`);
+
+      try {
+        const saved = await saveTrackOffline(track, resolveFreshStreamUrl);
+
+        // Check if user clicked another track during download
+        if (activeRequestIdRef.current !== currentReq) {
+          setDownloadedTrackIds((prev) => new Set(prev).add(track.id));
+          return;
+        }
+
+        setDownloadedTrackIds((prev) => new Set(prev).add(track.id));
+        setDownloadingTrackId(null);
+
+        // Play as soon as downloaded!
+        const playUrl = saved.streamUrl || track.streamUrl;
+        if (playUrl && audioRef.current) {
+          audioRef.current.src = playUrl;
+          audioRef.current.load();
+          try {
+            await audioRef.current.play();
+            setIsPlaying(true);
+            showToast(`Downloaded in app • Now Playing`);
+          } catch (err: any) {
+            if (err.name !== 'AbortError') {
+              console.warn('Playback error after download:', err);
               setIsPlaying(false);
             }
-          });
-
-        // 100% Background Process: Automatically download & cache music silently
-        saveTrackOffline({ ...track, streamUrl: targetUrl })
-          .then(() => {
-            setDownloadedTrackIds((prev) => new Set(prev).add(track.id));
-          })
-          .catch((err) => {
-            console.warn('Background caching note:', err);
-          });
-      } else {
-        console.warn('Could not resolve audio stream URL for track:', track.title);
-        setIsPlaying(false);
+          }
+        }
+      } catch (err) {
+        setDownloadingTrackId(null);
+        console.error('Download and play error:', err);
+        // Fallback: direct streaming
+        if (track.streamUrl && audioRef.current && activeRequestIdRef.current === currentReq) {
+          audioRef.current.src = track.streamUrl;
+          audioRef.current.load();
+          audioRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+        }
       }
     },
-    []
+    [showToast]
   );
 
   const nextTrack = useCallback(() => {
@@ -436,15 +455,34 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const downloadTrack = async (track: Track) => {
-    try {
+    // If it's already the currently playing track, save it without restarting playback
+    if (currentTrackRef.current?.id === track.id) {
+      if (downloadedTrackIds.has(track.id)) {
+        showToast(`"${track.title}" is already in In-App Library`);
+        return;
+      }
+      setDownloadingTrackId(track.id);
       showToast(`Downloading "${track.title}" in app...`);
-      await saveTrackOffline(track);
-      setDownloadedTrackIds((prev) => new Set(prev).add(track.id));
-      showToast(`Downloaded "${track.title}" to In-App Library`);
-    } catch (err) {
-      console.error('Download error:', err);
-      showToast(`Saved "${track.title}" to In-App Library`);
+      try {
+        const saved = await saveTrackOffline(track, resolveFreshStreamUrl);
+        setDownloadedTrackIds((prev) => new Set(prev).add(track.id));
+        setDownloadingTrackId(null);
+        showToast(`Downloaded "${track.title}" to In-App Library`);
+        if (saved.streamUrl && audioRef.current && isPlayingRef.current) {
+          const currentPos = audioRef.current.currentTime;
+          audioRef.current.src = saved.streamUrl;
+          audioRef.current.currentTime = currentPos;
+          audioRef.current.play().catch(() => {});
+        }
+      } catch (err) {
+        setDownloadingTrackId(null);
+        console.error('Download error:', err);
+      }
+      return;
     }
+
+    // Direct download song in app and play as soon as downloaded!
+    await playTrack(track);
   };
 
   const deleteDownloadedTrack = async (trackId: string | number) => {
@@ -477,6 +515,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isQualityModalOpen,
         favoriteTrackIds,
         downloadedTrackIds,
+        downloadingTrackId,
         toastMessage,
         playTrack,
         togglePlayPause,

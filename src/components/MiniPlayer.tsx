@@ -1,9 +1,17 @@
 import React from 'react';
-import { Play, Pause, SkipForward, Sparkles } from 'lucide-react';
+import { Play, Pause, SkipForward, Sparkles, Loader2 } from 'lucide-react';
 import { usePlayer } from '../context/PlayerContext';
 
 export const MiniPlayer: React.FC = () => {
-  const { currentTrack, isPlaying, togglePlayPause, nextTrack, openFullPlayer, openQualityModal } = usePlayer();
+  const {
+    currentTrack,
+    isPlaying,
+    togglePlayPause,
+    nextTrack,
+    openFullPlayer,
+    openQualityModal,
+    downloadingTrackId,
+  } = usePlayer();
 
   if (!currentTrack) return null;
 
@@ -34,7 +42,12 @@ export const MiniPlayer: React.FC = () => {
               <span className="text-[14px] font-semibold text-white truncate tracking-tight">
                 {currentTrack.title}
               </span>
-              {currentTrack.quality.badge.includes('Lossless') && (
+              {downloadingTrackId === currentTrack.id ? (
+                <span className="px-1.5 py-0.2 text-[8px] font-bold tracking-wider bg-[#FA233B]/20 text-[#FA233B] rounded uppercase flex items-center gap-1 flex-shrink-0 animate-pulse">
+                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                  <span>Downloading</span>
+                </span>
+              ) : currentTrack.quality.badge.includes('Lossless') && (
                 <button
                   type="button"
                   onClick={(e) => {
